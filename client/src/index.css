@@ -1,0 +1,8 @@
+@import "tailwindcss";
+
+/* optional – kad root ištemptų visą ekraną */
+html,
+body,
+#root {
+  height: 100%;
+}
