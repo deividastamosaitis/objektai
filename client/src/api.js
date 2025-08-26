@@ -1,48 +1,87 @@
+// client/src/api.js
 const API_URL = import.meta.env.VITE_API_URL ?? "/api/v1";
 
-async function api(path, opts = {}) {
+// Bendras fetch helperis
+async function api(path, { method = "GET", body, headers } = {}) {
+  const url = path.startsWith("http") ? path : `${API_URL}${path}`;
+  const isFormData = body instanceof FormData;
+
+  // suformuojam galutinius headers (prioritetas – perduotiems per parametrą)
+  const baseHeaders = isFormData ? {} : { "Content-Type": "application/json" };
+  const finalHeaders = { ...baseHeaders, ...(headers || {}) };
+
   try {
-    const isFormData = opts.body instanceof FormData;
-    const res = await fetch(`${API_URL}${path}`, {
+    const res = await fetch(url, {
+      method,
       credentials: "include",
-      headers: isFormData
-        ? { ...(opts.headers || {}) } // be Content-Type
-        : { "Content-Type": "application/json", ...(opts.headers || {}) },
-      ...opts,
+      body: isFormData ? body : body ? JSON.stringify(body) : undefined,
+      headers: finalHeaders,
     });
 
-    let data = null;
-    try {
-      data = await res.json();
-    } catch (_) {}
+    // pabandom kaip JSON; jei ne – kaip tekstą
+    const ct = res.headers.get("content-type") || "";
+    const data = ct.includes("application/json")
+      ? await res.json().catch(() => null)
+      : await res.text().catch(() => null);
 
     if (!res.ok) {
-      let msg = "Nežinoma klaida";
-      if (data?.msg) msg = data.msg;
-      else if (Array.isArray(data)) msg = data.join(", ");
-      else if (Array.isArray(data?.msg)) msg = data.msg.join(", ");
-      else if (data?.errors) msg = data.errors.map((e) => e.msg).join(", ");
-      else msg = `Klaida ${res.status}`;
+      const msg =
+        (data && (data.msg || data.error)) ||
+        (Array.isArray(data) && data.join(", ")) ||
+        (Array.isArray(data?.msg) && data.msg.join(", ")) ||
+        (data?.errors && data.errors.map((e) => e.msg).join(", ")) ||
+        `Klaida ${res.status}`;
       throw new Error(msg);
     }
 
     return data;
   } catch (err) {
-    if (err.name === "TypeError")
+    if (err.name === "TypeError") {
+      // pvz. serveris nepasiekiamas
       throw new Error("Nepavyko prisijungti prie serverio");
+    }
     throw err;
   }
 }
 
-export const post = (path, body) =>
-  api(path, { method: "POST", body: JSON.stringify(body) });
-export const postForm = (path, formData) =>
-  api(path, { method: "POST", body: formData }); // ← NAUJA
-export const patchForm = (path, formData) =>
-  api(path, { method: "PATCH", body: formData }); // ← nauja
-export const patch = (path, body) =>
-  api(path, { method: "PATCH", body: JSON.stringify(body) });
-export const get = (path) => api(path);
+// --- Bendri helperiai
+export const get = (p) => api(p);
+export const post = (p, b) => api(p, { method: "POST", body: b });
+export const patch = (p, b) => api(p, { method: "PATCH", body: b });
+export const del = (p) => api(p, { method: "DELETE" });
+
+// FormData variantai
+export const postForm = (p, formData) =>
+  api(p, { method: "POST", body: formData });
+export const patchForm = (p, formData) =>
+  api(p, { method: "PATCH", body: formData });
+
+// Sutartims
 export const createSutartis = (body) => post("/sutartys", body);
 export const uploadSutartisPDF = (formData) =>
   postForm("/sutartys/upload", formData);
+
+// Montavimui
+export async function saveMontavimas(jobId, payload) {
+  // paduodam OBJEKTĄ – api() pats vieną kartą padarys JSON.stringify
+  return api(`/jobs/${jobId}/montavimas`, {
+    method: "PATCH",
+    body: payload,
+  });
+}
+
+export async function downloadMontavimasExcel(jobId) {
+  const res = await fetch(`${API_URL}/jobs/${jobId}/montavimas/export`, {
+    credentials: "include",
+  });
+  if (!res.ok) throw new Error("Nepavyko atsisiųsti Excel");
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = `montavimas-${jobId}.xlsx`;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+}

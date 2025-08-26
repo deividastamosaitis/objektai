@@ -4,6 +4,10 @@ import Navbar from "../components/Navbar.jsx";
 import { get, patchForm } from "../api.js";
 import Lightbox from "../components/Lightbox.jsx";
 
+// Nauja – graži korta + modalas montavimui
+import MontavimasCard from "../components/MontavimasCard.jsx";
+import MontavimasModal from "../components/MontavimasModal.jsx";
+
 export default function JobDetails() {
   const { id } = useParams();
   const navigate = useNavigate();
@@ -13,6 +17,15 @@ export default function JobDetails() {
 
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxStart, setLightboxStart] = useState(0);
+
+  // Montavimo modalas
+  const [montModalOpen, setMontModalOpen] = useState(false);
+  const [montInitial, setMontInitial] = useState(null);
+
+  const reload = async () => {
+    const data = await get(`/jobs/${id}`);
+    setJob(data?.job || null);
+  };
 
   useEffect(() => {
     let ignore = false;
@@ -83,10 +96,12 @@ export default function JobDetails() {
             ← Grįžti į sąrašą
           </Link>
         </div>
+
         <div className="flex items-center gap-2">
           <Link to="/jobs" className="text-sm text-blue-600 hover:underline">
             ← Grįžti į sąrašą
           </Link>
+
           {job && (
             <>
               <button
@@ -95,9 +110,10 @@ export default function JobDetails() {
               >
                 Redaguoti
               </button>
+
+              {/* Greitas „prislopinti/atprislopinti“ */}
               <button
                 onClick={async () => {
-                  // „greitas“ prislopinimas: išsaugom visus laukus + togglinam prislopintas
                   try {
                     const fd = new FormData();
                     fd.append("vardas", (job.vardas || "").trim());
@@ -108,17 +124,13 @@ export default function JobDetails() {
                     if (job.lat) fd.append("lat", job.lat);
                     if (job.lng) fd.append("lng", job.lng);
                     if (job.email) fd.append("email", job.email);
-                    // toggle
                     const willBe = !job.prislopintas;
                     if (willBe) fd.append("prislopintas", "on");
-                    // paliekam esamas
                     (job.images || []).forEach((u) =>
                       fd.append("existingImages", u)
                     );
                     await patchForm(`/jobs/${job._id}`, fd);
-                    // perkraunam duomenis
-                    const fresh = await get(`/jobs/${job._id}`);
-                    setJob(fresh?.job || job);
+                    await reload();
                   } catch (e) {
                     console.error(e);
                     alert(e?.message || "Nepavyko pakeisti būsenos");
@@ -133,20 +145,20 @@ export default function JobDetails() {
               >
                 {job?.prislopintas ? "Atprislopinti" : "Prislopinti"}
               </button>
+
+              {/* Sudaryti sutartį */}
               <button
                 onClick={() => {
                   if (!job) return;
                   navigate("/sutartys/create", {
                     state: {
-                      // Mapinimas iš job -> sutarties formą
-                      pavadinimas: (job.vardas || "").trim(), // Įmonės/Ūkio pavadinimas
-                      isImone: false, // paliekam vartotojui pačiam uždėti varnelę, jei reikia
-                      VAT: "", // jei pažymės „Tai įmonė“, formoje pareikalaus įvesti
+                      pavadinimas: (job.vardas || "").trim(),
+                      isImone: false,
+                      VAT: "",
                       asmuo: (job.vardas || "").trim(),
                       adresas: (job.adresas || "").trim(),
                       telefonas: (job.telefonas ?? "").toString().trim(),
                       email: (job.email || "").trim(),
-                      // sutarimai nepersikelia – rašoma ranka
                     },
                   });
                 }}
@@ -168,9 +180,9 @@ export default function JobDetails() {
 
         {job && (
           <>
-            {/* viršus: info + mapa */}
+            {/* Viršus: informacija + žemėlapis */}
             <section className="grid gap-6 lg:grid-cols-3">
-              {/* Informacijos lentelė su „table-like“ UI */}
+              {/* Informacijos lentelė */}
               <div className="bg-white rounded-2xl shadow-sm border overflow-hidden lg:col-span-2">
                 <div className="px-5 py-4 border-b">
                   <h2 className="text-lg font-semibold">Informacija</h2>
@@ -241,7 +253,7 @@ export default function JobDetails() {
               </div>
             </section>
 
-            {/* Galerija su lightbox/slider */}
+            {/* Media galerija */}
             <section className="bg-white rounded-2xl shadow-sm border">
               <div className="px-5 py-4 border-b flex items-center justify-between">
                 <h2 className="text-lg font-semibold">Media</h2>
@@ -271,7 +283,6 @@ export default function JobDetails() {
                         className="block group"
                         title={`Peržiūrėti #${i + 1}`}
                       >
-                        {/* thumbnail kaip img; jei video – parodyti „video“ ženkliuką */}
                         <div className="relative">
                           <img
                             src={src}
@@ -295,6 +306,15 @@ export default function JobDetails() {
                 )}
               </div>
             </section>
+
+            {/* Montavimo kortelė (su Edit/Pildyti ir Excel mygtukais) */}
+            <MontavimasCard
+              job={job}
+              onEdit={(initial) => {
+                setMontInitial(initial || null);
+                setMontModalOpen(true);
+              }}
+            />
           </>
         )}
       </main>
@@ -304,6 +324,22 @@ export default function JobDetails() {
           items={media}
           startIndex={lightboxStart}
           onClose={() => setLightboxOpen(false)}
+        />
+      )}
+
+      {/* Montavimo modalas */}
+      {job && (
+        <MontavimasModal
+          open={montModalOpen}
+          onClose={() => setMontModalOpen(false)}
+          job={job}
+          initial={montInitial}
+          onSaved={async () => {
+            try {
+              const fresh = await get(`/jobs/${id}`);
+              setJob(fresh?.job || job);
+            } catch (_) {}
+          }}
         />
       )}
     </div>

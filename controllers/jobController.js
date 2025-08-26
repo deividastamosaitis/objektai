@@ -2,6 +2,7 @@ import Job from "../models/JobModel.js";
 import { StatusCodes } from "http-status-codes";
 import cloudinary from "cloudinary";
 import { promises as fs } from "fs";
+import ExcelJS from "exceljs";
 
 export const getAllJobs = async (req, res) => {
   // const jobs = await Job.find({ createdBy: req.user.userId });
@@ -95,4 +96,137 @@ export const deleteJob = async (req, res) => {
   res
     .status(StatusCodes.OK)
     .json({ msg: "Objektas ištrintas", job: removedJob });
+};
+
+export const upsertMontavimas = async (req, res) => {
+  const { id } = req.params;
+
+  // leidžiam siųsti tik montavimo bloko laukus
+  const {
+    adresas,
+    kontaktai,
+    irangosSistema,
+    nvr,
+    nvrSN,
+    kameros = [],
+    papildomaIranga,
+    tinklas = {},
+    prisijungimai = {},
+    paleidimoData,
+  } = req.body || {};
+
+  const payload = {
+    adresas,
+    kontaktai,
+    irangosSistema,
+    nvr,
+    nvrSN,
+    kameros: Array.isArray(kameros)
+      ? kameros.map((k) => ({
+          pavadinimas: k.pavadinimas || "",
+          sn: k.sn || "",
+        }))
+      : [],
+    papildomaIranga,
+    tinklas: {
+      kameruIP: tinklas.kameruIP || "",
+      routerioIP: tinklas.routerioIP || "",
+      nvrIP: tinklas.nvrIP || "",
+    },
+    prisijungimai: {
+      nvr: prisijungimai.nvr || "",
+    },
+    paleidimoData: paleidimoData ? new Date(paleidimoData) : new Date(),
+    atliko: req.user?.userId, // current user iš auth middleware
+  };
+
+  const job = await Job.findByIdAndUpdate(
+    id,
+    { montavimas: payload },
+    { new: true }
+  ).populate("montavimas.atliko", "name email");
+
+  res.status(StatusCodes.OK).json({ msg: "Montavimas išsaugotas", job });
+};
+
+// === NAUJA: Excel eksportas ===
+export const exportMontavimasExcel = async (req, res) => {
+  const { id } = req.params;
+  const job = await Job.findById(id).populate(
+    "montavimas.atliko",
+    "name email"
+  );
+  if (!job)
+    return res.status(StatusCodes.NOT_FOUND).json({ msg: "Job nerastas" });
+  if (!job.montavimas)
+    return res
+      .status(StatusCodes.BAD_REQUEST)
+      .json({ msg: "Montavimo duomenų nėra" });
+
+  const wb = new ExcelJS.Workbook();
+  const ws = wb.addWorksheet("Montavimas");
+
+  const m = job.montavimas;
+
+  ws.columns = [
+    { header: "Laukas", key: "k", width: 28 },
+    { header: "Reikšmė", key: "v", width: 60 },
+  ];
+
+  const push = (k, v) => ws.addRow({ k, v: v ?? "" });
+
+  ws.addRow(["Objekto montavimo informacija", ""]).font = { bold: true };
+  push("Objekto adresas", m.adresas || job.adresas || "");
+  push("Kliento vardas", m.kontaktai?.vardas || job.vardas || "");
+  push("Kliento telefonas", m.kontaktai?.telefonas || job.telefonas || "");
+  ws.addRow([]);
+
+  ws.addRow(["Įranga", ""]).font = { bold: true };
+  push("Įrangos sistema", m.irangosSistema || "");
+  push("NVR", m.nvr || "");
+  push("NVR SN", m.nvrSN || "");
+  push("Papildoma įranga", m.papildomaIranga || "");
+  ws.addRow([]);
+
+  ws.addRow(["Kameros", ""]).font = { bold: true };
+  if (Array.isArray(m.kameros) && m.kameros.length > 0) {
+    m.kameros.forEach((cam, idx) => {
+      push(`Kamera #${idx + 1} pavadinimas`, cam.pavadinimas || "");
+      push(`Kamera #${idx + 1} SN`, cam.sn || "");
+    });
+  } else {
+    push("Kameros", "—");
+  }
+  ws.addRow([]);
+
+  ws.addRow(["Tinklo nustatymai", ""]).font = { bold: true };
+  push("Kamerų IP", m.tinklas?.kameruIP || "");
+  push("Routerio IP", m.tinklas?.routerioIP || "");
+  push("NVR IP", m.tinklas?.nvrIP || "");
+  ws.addRow([]);
+
+  ws.addRow(["Prisijungimai", ""]).font = { bold: true };
+  push("NVR prisijungimas", m.prisijungimai?.nvr || "");
+  ws.addRow([]);
+
+  ws.addRow(["Kita", ""]).font = { bold: true };
+  push(
+    "Paleidimo data",
+    m.paleidimoData ? new Date(m.paleidimoData).toLocaleDateString("lt-LT") : ""
+  );
+  push("Darbus atliko", m.atliko?.name || m.atliko?.email || "");
+  ws.addRow([]);
+
+  // atsakymas kaip .xlsx
+  const fname = `montavimas-${(job.vardas || "objektas")
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/gi, "-")}-${job._id}.xlsx`;
+  res.setHeader(
+    "Content-Type",
+    "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+  );
+  res.setHeader("Content-Disposition", `attachment; filename="${fname}"`);
+
+  await wb.xlsx.write(res);
+  res.end();
 };

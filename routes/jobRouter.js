@@ -7,6 +7,8 @@ import {
   createJob,
   updateJob,
   deleteJob,
+  upsertMontavimas,
+  exportMontavimasExcel,
 } from "../controllers/jobController.js";
 import {
   validateJobInput,
@@ -23,5 +25,8 @@ router
   .get(getJob)
   .patch(upload.array("images"), validateJobInput, validateIdParam, updateJob)
   .delete(validateIdParam, deleteJob);
+
+router.patch("/:id/montavimas", validateIdParam, upsertMontavimas);
+router.get("/:id/montavimas/export", validateIdParam, exportMontavimasExcel);
 
 export default router;
