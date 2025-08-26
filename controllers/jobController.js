@@ -50,42 +50,93 @@ export const getJob = async (req, res) => {
   res.status(StatusCodes.OK).json({ job });
 };
 
+const ALLOWED_DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
 export const updateJob = async (req, res) => {
   try {
-    const newJob = { ...req.body };
-
-    // Boolean konvertavimas
-    newJob.prislopintas = req.body.prislopintas === "on";
-
-    // Nuotraukų apdorojimas
-    const imagesToKeep = req.body.existingImages || [];
-    const keep = Array.isArray(imagesToKeep) ? imagesToKeep : [imagesToKeep];
-
-    // Naujos nuotraukos
-    if (req.files && req.files.length > 0) {
-      const newUploads = await Promise.all(
-        req.files.map(async (file) => {
-          const result = await cloudinary.v2.uploader.upload(file.path);
-          await fs.unlink(file.path);
-          return result.secure_url;
-        })
-      );
-      newJob.images = [...keep, ...newUploads];
-    } else {
-      newJob.images = keep;
+    const jobId = req.params.id;
+    const current = await Job.findById(jobId);
+    if (!current) {
+      return res.status(StatusCodes.NOT_FOUND).json({ msg: "Nerastas įrašas" });
     }
 
-    // DB atnaujinimas
-    const updatedJob = await Job.findByIdAndUpdate(req.params.id, newJob, {
+    const isMultipart =
+      !!req.files ||
+      (req.headers["content-type"] || "").includes("multipart/form-data");
+    const body = req.body || {};
+    const update = {};
+
+    // ——— Paprasti tekstiniai/skaitiniai laukai (pildyk pagal savo modelį, bet tik jei ateina body)
+    const passThroughKeys = [
+      "vardas",
+      "telefonas",
+      "adresas",
+      "email",
+      "jobStatus",
+      "info",
+      "lat",
+      "lng",
+      "createdUser",
+    ];
+    for (const k of passThroughKeys) {
+      if (Object.prototype.hasOwnProperty.call(body, k)) {
+        update[k] = body[k];
+      }
+    }
+
+    // ——— prislopintas: atnaujinti tik jei ateina laukas
+    if (Object.prototype.hasOwnProperty.call(body, "prislopintas")) {
+      // forma siunčia "on" kai pažymėta, kitaip dažnai visai nesiunčia
+      update.prislopintas =
+        body.prislopintas === "on" || body.prislopintas === true;
+    }
+
+    // ——— weekDay: Mon..Sat, ""/null -> null
+    if (Object.prototype.hasOwnProperty.call(body, "weekDay")) {
+      const v = body.weekDay;
+      if (v === "" || v === null || v === undefined) {
+        update.weekDay = null;
+      } else if (!ALLOWED_DAYS.includes(v)) {
+        return res
+          .status(StatusCodes.BAD_REQUEST)
+          .json({ msg: "Neteisinga savaitės diena" });
+      } else {
+        update.weekDay = v;
+      }
+    }
+
+    // ——— Nuotraukos: keisti tik jei multipart ir tik jei siųsti existingImages / naujas files
+    if (isMultipart) {
+      const imagesToKeep = body.existingImages ?? [];
+      const keep = Array.isArray(imagesToKeep) ? imagesToKeep : [imagesToKeep];
+
+      if (req.files && req.files.length > 0) {
+        const newUploads = await Promise.all(
+          req.files.map(async (file) => {
+            const result = await cloudinary.v2.uploader.upload(file.path);
+            await fs.unlink(file.path);
+            return result.secure_url;
+          })
+        );
+        update.images = [...keep, ...newUploads];
+      } else if (body.existingImages !== undefined) {
+        // jei bent jau existingImages yra – nustatyk naują masyvą (gali būti ir tuščias)
+        update.images = keep;
+      }
+      // jei multipart, bet be existingImages ir be files – neliesti images
+    }
+
+    const updatedJob = await Job.findByIdAndUpdate(jobId, update, {
       new: true,
+      runValidators: true,
     });
 
-    res
+    return res
       .status(StatusCodes.OK)
       .json({ msg: "Objektas atnaujintas", job: updatedJob });
   } catch (error) {
     console.error("UpdateJob klaida:", error);
-    res
+    return res
       .status(StatusCodes.INTERNAL_SERVER_ERROR)
       .json({ msg: "Serverio klaida" });
   }

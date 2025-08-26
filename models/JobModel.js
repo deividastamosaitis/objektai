@@ -59,6 +59,11 @@ const JobSchema = new mongoose.Schema(
 
     // <<< NAUJA
     montavimas: MontavimasSchema,
+    weekDay: {
+      type: String,
+      enum: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
+      default: null,
+    },
   },
   { timestamps: true }
 );

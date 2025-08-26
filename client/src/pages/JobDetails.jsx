@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import Navbar from "../components/Navbar.jsx";
-import { get, patchForm } from "../api.js";
+import { get, patchForm, patch } from "../api.js";
 import Lightbox from "../components/Lightbox.jsx";
 
 // Nauja – graži korta + modalas montavimui
@@ -21,6 +21,16 @@ export default function JobDetails() {
   // Montavimo modalas
   const [montModalOpen, setMontModalOpen] = useState(false);
   const [montInitial, setMontInitial] = useState(null);
+
+  //savaites dienos
+  const DOW = [
+    { key: "Mon", lt: "Pirmadienis" },
+    { key: "Tue", lt: "Antradienis" },
+    { key: "Wed", lt: "Trečiadienis" },
+    { key: "Thu", lt: "Ketvirtadienis" },
+    { key: "Fri", lt: "Penktadienis" },
+    { key: "Sat", lt: "Šeštadienis" },
+  ];
 
   const reload = async () => {
     const data = await get(`/jobs/${id}`);
@@ -248,6 +258,60 @@ export default function JobDetails() {
                     <div className="text-sm text-gray-600">
                       Nėra pakankamai informacijos žemėlapiui.
                     </div>
+                  )}
+                </div>
+                <div className="px-3 pb-4">
+                  {job.weekDay ? (
+                    <div className="mt-3 text-sm">
+                      <span className="mr-2 text-gray-600">
+                        Suplanuota diena:
+                      </span>
+                      <span className="inline-flex items-center gap-2 px-2 py-1 rounded-full bg-emerald-100 text-emerald-700">
+                        {DOW.find((d) => d.key === job.weekDay)?.lt ||
+                          job.weekDay}
+                      </span>
+                      <button
+                        className="ml-3 text-xs text-blue-600 underline"
+                        onClick={async () => {
+                          try {
+                            await patch(`/jobs/${job._id}`, { weekDay: null }); // nuimti planą
+                            await reload();
+                          } catch (e) {
+                            alert(e?.message || "Nepavyko nuimti dienos");
+                          }
+                        }}
+                      >
+                        Keisti
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="mt-3 text-sm text-gray-600">
+                        Priskirkite savaitės dieną:
+                      </div>
+                      <div className="mt-2 flex flex-wrap gap-2">
+                        {DOW.map((d) => (
+                          <button
+                            key={d.key}
+                            className="rounded-lg border px-3 py-1.5 bg-white hover:bg-gray-50 text-sm"
+                            onClick={async () => {
+                              try {
+                                await patch(`/jobs/${job._id}`, {
+                                  weekDay: d.key,
+                                });
+                                await reload();
+                              } catch (e) {
+                                alert(
+                                  e?.message || "Nepavyko išsaugoti dienos"
+                                );
+                              }
+                            }}
+                          >
+                            {d.lt}
+                          </button>
+                        ))}
+                      </div>
+                    </>
                   )}
                 </div>
               </div>

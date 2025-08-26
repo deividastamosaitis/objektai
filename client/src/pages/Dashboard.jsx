@@ -40,6 +40,30 @@ export default function Dashboard() {
   const [hideDone, setHideDone] = useState(true); // filtras: be „Baigta“
   const navigate = useNavigate();
 
+  //savaites dienos
+  const DOW = [
+    { key: "Mon", lt: "Pirmadienis" },
+    { key: "Tue", lt: "Antradienis" },
+    { key: "Wed", lt: "Trečiadienis" },
+    { key: "Thu", lt: "Ketvirtadienis" },
+    { key: "Fri", lt: "Penktadienis" },
+    { key: "Sat", lt: "Šeštadienis" },
+  ];
+
+  const grouped = useMemo(() => {
+    const bins = { Mon: [], Tue: [], Wed: [], Thu: [], Fri: [], Sat: [] };
+    (jobs || []).forEach((j) => {
+      if (!j.weekDay) return;
+      if (!bins[j.weekDay]) bins[j.weekDay] = [];
+      bins[j.weekDay].push(j);
+    });
+    // pvz. rikiuojam pagal createdAt
+    Object.keys(bins).forEach((k) => {
+      bins[k].sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt));
+    });
+    return bins;
+  }, [jobs]);
+
   useEffect(() => {
     let ignore = false;
     (async () => {
@@ -88,7 +112,7 @@ export default function Dashboard() {
 
         {/* Stats */}
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-          <StatCard label="Jobs (viso)" value={stats.jobs} />
+          <StatCard label="Objektai (viso)" value={stats.jobs} />
           <StatCard label="Sutartys (viso)" value={stats.sutartys} />
         </div>
 
@@ -150,6 +174,56 @@ export default function Dashboard() {
                 ))}
               </div>
             )}
+          </section>
+          <section className="mt-4 bg-white rounded-2xl shadow-sm border lg:col-span-3">
+            <div className="px-5 py-3 border-b">
+              <h3 className="text-lg font-semibold">Savaitės planas</h3>
+            </div>
+
+            <div className="p-4 grid md:grid-cols-1 lg:grid-cols-3 gap-4">
+              {DOW.map((d) => (
+                <div key={d.key} className="rounded-xl border p-3">
+                  <div className="text-sm font-semibold mb-2">{d.lt}</div>
+                  {grouped[d.key]?.length ? (
+                    <ul className="space-y-1">
+                      {grouped[d.key].map((j) => (
+                        <li key={j._id}>
+                          <button
+                            className="w-full text-left text-sm rounded-lg px-2 py-1 hover:bg-gray-50"
+                            onClick={() => {
+                              if (!j.lat || !j.lng) return;
+                              // flyTo animacija į markerį
+                              const map =
+                                mapRef?.current?.getMap?.() ||
+                                mapRef?.current?.map;
+                              if (map && map.flyTo) {
+                                map.flyTo({
+                                  center: [Number(j.lng), Number(j.lat)],
+                                  zoom: 14,
+                                  essential: true,
+                                  speed: 0.8,
+                                  curve: 1.4,
+                                });
+                              }
+                            }}
+                            title="Rodyti žemėlapyje"
+                          >
+                            <div className="font-medium truncate">
+                              {j.vardas || "—"}
+                            </div>
+                            <div className="text-xs text-gray-500 truncate">
+                              {j.adresas || "—"}
+                            </div>
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  ) : (
+                    <div className="text-xs text-gray-500">Nėra priskirtų</div>
+                  )}
+                </div>
+              ))}
+            </div>
           </section>
         </div>
       </main>

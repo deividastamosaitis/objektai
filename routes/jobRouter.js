@@ -13,6 +13,7 @@ import {
 import {
   validateJobInput,
   validateIdParam,
+  validateJobUpdateInput,
 } from "../middleware/validationMiddleware.js";
 import upload from "../middleware/multerMiddleware.js";
 
@@ -23,7 +24,12 @@ router
 router
   .route("/:id")
   .get(getJob)
-  .patch(upload.array("images"), validateJobInput, validateIdParam, updateJob)
+  .patch(
+    upload.array("images"),
+    validateJobUpdateInput,
+    validateIdParam,
+    updateJob
+  )
   .delete(validateIdParam, deleteJob);
 
 router.patch("/:id/montavimas", validateIdParam, upsertMontavimas);
