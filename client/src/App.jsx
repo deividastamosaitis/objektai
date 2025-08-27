@@ -8,9 +8,10 @@ import JobsList from "./pages/JobsList.jsx";
 import JobDetails from "./pages/JobDetails.jsx";
 //SUTARTYS
 import SutartysList from "./pages/SutartysList.jsx";
+import Sutartys from "./pages/Sutartys.jsx";
 import SutartysCreate from "./pages/SutartysCreate.jsx";
-import SutartisSign from "./pages/SutartisSign.jsx";
-import SutartisSuccess from "./pages/SutartisSuccess.jsx";
+import PublicContractSign from "./pages/PublicContractSign.jsx";
+import PublicContractThanks from "./pages/PublicContractThanks.jsx";
 
 import ProtectedRoute from "./routes/ProtectedRoute.jsx";
 import { AuthProvider } from "./context/AuthContext.jsx";
@@ -73,7 +74,7 @@ export default function App() {
           path="/sutartys"
           element={
             <ProtectedRoute>
-              <SutartysList />
+              <Sutartys />
             </ProtectedRoute>
           }
         />
@@ -85,8 +86,8 @@ export default function App() {
             </ProtectedRoute>
           }
         />
-        <Route path="/sutartis/:id" element={<SutartisSign />} />
-        <Route path="/sutartys/success/:id" element={<SutartisSuccess />} />
+        <Route path="/sutartis/:token" element={<PublicContractSign />} />
+        <Route path="/sutartis/signed" element={<PublicContractThanks />} />
         <Route path="*" element={<div className="p-6">404</div>} />
       </Routes>
     </AuthProvider>

@@ -19,7 +19,7 @@ import authRouter from "./routes/authRouter.js";
 import userRouter from "./routes/userRouter.js";
 import darbaiRouter from "./routes/darbaiRouter.js";
 import reminders from "./routes/reminders.js";
-import sutartysRouter from "./routes/sutartysRouter.js";
+import contractsRoutes from "./routes/contractsRoutes.js";
 
 //public
 import { dirname } from "path";
@@ -56,16 +56,12 @@ app.get("/", (req, res) => {
   res.send("Hello world");
 });
 
-app.get("/api/v1/test", (req, res) => {
-  res.json({ msg: "test route" });
-});
-
 app.use("/api/v1/jobs", authenticateUser, jobRouter);
 app.use("/api/v1/users", authenticateUser, userRouter);
 app.use("/api/v1/auth", authRouter);
 app.use("/api/v1/darbai", darbaiRouter);
 app.use("/api/v1/reminders", reminders);
-app.use("/api/v1/sutartys", sutartysRouter);
+app.use("/api/v1/sutartys", contractsRoutes);
 
 app.get("*", (req, res) => {
   res.sendFile(path.resolve(__dirname, "./public", "index.html"));

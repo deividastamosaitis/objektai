@@ -3,6 +3,7 @@ import { useParams, Link, useNavigate } from "react-router-dom";
 import Navbar from "../components/Navbar.jsx";
 import { get, patchForm, patch, del } from "../api.js";
 import Lightbox from "../components/Lightbox.jsx";
+import ContractsCard from "../components/ContractsCard.jsx";
 
 // Nauja – graži korta + modalas montavimui
 import MontavimasCard from "../components/MontavimasCard.jsx";
@@ -173,26 +174,7 @@ export default function JobDetails() {
               </button>
 
               {/* Sudaryti sutartį */}
-              <button
-                onClick={() => {
-                  if (!job) return;
-                  navigate("/sutartys/create", {
-                    state: {
-                      pavadinimas: (job.vardas || "").trim(),
-                      isImone: false,
-                      VAT: "",
-                      asmuo: (job.vardas || "").trim(),
-                      adresas: (job.adresas || "").trim(),
-                      telefonas: (job.telefonas ?? "").toString().trim(),
-                      email: (job.email || "").trim(),
-                    },
-                  });
-                }}
-                className="text-sm rounded-lg bg-blue-600 text-white px-3 py-1.5 hover:bg-blue-700"
-                title="Sudaryti sutartį pagal šį įrašą"
-              >
-                Sudaryti sutartį
-              </button>
+
               <button
                 onClick={async () => {
                   if (!job) return;
@@ -426,6 +408,7 @@ export default function JobDetails() {
                 setMontModalOpen(true);
               }}
             />
+            <ContractsCard job={job} />
           </>
         )}
       </main>

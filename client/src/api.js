@@ -58,6 +58,9 @@ export const patchForm = (p, formData) =>
 
 // Sutartims
 export const createSutartis = (body) => post("/sutartys", body);
+export const listContracts = (jobId) => get(`/sutartys?job=${jobId}`);
+export const createContract = (body) => post("/sutartys", body);
+export const listAllContracts = () => get(`/sutartys`);
 export const uploadSutartisPDF = (formData) =>
   postForm("/sutartys/upload", formData);
 
