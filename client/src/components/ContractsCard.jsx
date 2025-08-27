@@ -2,6 +2,37 @@ import { useEffect, useState } from "react";
 import { listContracts } from "../api";
 import ContractCreateModal from "./ContractCreateModal";
 
+function buildAbsoluteUrl(url) {
+  // backend grąžina pvz. "/uploads/contracts/xxx.pdf" arba "/sutartis/<token>"
+  if (!url) return "";
+  return url.startsWith("http") ? url : `${window.location.origin}${url}`;
+}
+
+async function copyToClipboard(text) {
+  const value = buildAbsoluteUrl(text);
+  try {
+    // veikia tik https arba localhost
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(value);
+      return true;
+    }
+    // Fallback: paslėptas textarea
+    const ta = document.createElement("textarea");
+    ta.value = value;
+    ta.style.position = "fixed";
+    ta.style.left = "-9999px";
+    ta.style.top = "0";
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    const ok = document.execCommand("copy");
+    document.body.removeChild(ta);
+    return ok;
+  } catch {
+    return false;
+  }
+}
+
 function StatusBadge({ status }) {
   const s = (status || "pending").toLowerCase();
   const map = {
@@ -93,10 +124,16 @@ export default function ContractsCard({ job }) {
                   ) : (
                     c.signingUrl && (
                       <button
-                        onClick={() =>
-                          navigator.clipboard.writeText(c.signingUrl)
-                        }
+                        onClick={async () => {
+                          const ok = await copyToClipboard(c.signingUrl);
+                          alert(
+                            ok
+                              ? "Nuoroda nukopijuota ✅"
+                              : "Nepavyko nukopijuoti ❌"
+                          );
+                        }}
                         className="rounded-lg border px-3 py-1.5 text-sm bg-white hover:bg-gray-50"
+                        title="Kopijuoti pasirašymo nuorodą"
                       >
                         Kopijuoti nuorodą
                       </button>
