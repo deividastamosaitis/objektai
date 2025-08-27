@@ -32,6 +32,25 @@ export default function JobDetails() {
     { key: "Sat", lt: "Šeštadienis" },
   ];
 
+  const [assigning, setAssigning] = useState(false);
+
+  async function setWeekDay(val) {
+    if (!job) return;
+    try {
+      setAssigning(true);
+      await patch(`/jobs/${job._id}`, { weekDay: val ?? "" }); // "" → nuimti
+      const fresh = await get(`/jobs/${job._id}`);
+      setJob(fresh?.job || job);
+    } catch (e) {
+      alert(e?.message || "Nepavyko atnaujinti savaitės dienos");
+    } finally {
+      setAssigning(false);
+    }
+  }
+
+  const isBaigta = (job?.jobStatus || "").toLowerCase().includes("baigta");
+  //savaites dienos BAIGTA
+
   const reload = async () => {
     const data = await get(`/jobs/${id}`);
     setJob(data?.job || null);
@@ -261,57 +280,61 @@ export default function JobDetails() {
                   )}
                 </div>
                 <div className="px-3 pb-4">
-                  {job.weekDay ? (
-                    <div className="mt-3 text-sm">
-                      <span className="mr-2 text-gray-600">
-                        Suplanuota diena:
-                      </span>
-                      <span className="inline-flex items-center gap-2 px-2 py-1 rounded-full bg-emerald-100 text-emerald-700">
-                        {DOW.find((d) => d.key === job.weekDay)?.lt ||
-                          job.weekDay}
-                      </span>
-                      <button
-                        className="ml-3 text-xs text-blue-600 underline"
-                        onClick={async () => {
-                          try {
-                            await patch(`/jobs/${job._id}`, { weekDay: null }); // nuimti planą
-                            await reload();
-                          } catch (e) {
-                            alert(e?.message || "Nepavyko nuimti dienos");
-                          }
-                        }}
-                      >
-                        Keisti
-                      </button>
-                    </div>
-                  ) : (
-                    <>
-                      <div className="mt-3 text-sm text-gray-600">
-                        Priskirkite savaitės dieną:
-                      </div>
-                      <div className="mt-2 flex flex-wrap gap-2">
-                        {DOW.map((d) => (
+                  {!isBaigta && (
+                    <div className="px-5 py-4 border-t">
+                      <h3 className="text-sm font-semibold mb-2">
+                        Savaitės diena
+                      </h3>
+
+                      {job.weekDay ? (
+                        <div className="grid items-center gap-3">
+                          <span className="inline-flex items-center rounded-full bg-blue-50 text-blue-700 px-3 py-1 text-sm">
+                            {DOW.find((d) => d.key === job.weekDay)?.lt ||
+                              job.weekDay}
+                          </span>
                           <button
-                            key={d.key}
-                            className="rounded-lg border px-3 py-1.5 bg-white hover:bg-gray-50 text-sm"
-                            onClick={async () => {
-                              try {
-                                await patch(`/jobs/${job._id}`, {
-                                  weekDay: d.key,
-                                });
-                                await reload();
-                              } catch (e) {
-                                alert(
-                                  e?.message || "Nepavyko išsaugoti dienos"
-                                );
-                              }
-                            }}
+                            className="rounded-lg border px-3 py-1.5 text-sm bg-white hover:bg-gray-50 disabled:opacity-50"
+                            disabled={assigning}
+                            onClick={() => setWeekDay(null)} // nuimti priskyrimą
+                            title="Nuimti dienos priskyrimą"
                           >
-                            {d.lt}
+                            Nuimti
                           </button>
-                        ))}
-                      </div>
-                    </>
+                          <span className="text-sm text-gray-500">
+                            / pakeisti:
+                          </span>
+                          <div className="flex flex-wrap gap-2">
+                            {DOW.map((d) => (
+                              <button
+                                key={d.key}
+                                className={`rounded-lg px-3 py-1.5 text-sm border ${
+                                  job.weekDay === d.key
+                                    ? "bg-blue-600 text-white border-blue-600"
+                                    : "bg-white hover:bg-gray-50"
+                                } disabled:opacity-50`}
+                                disabled={assigning}
+                                onClick={() => setWeekDay(d.key)}
+                              >
+                                {d.lt}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex flex-wrap gap-2">
+                          {DOW.map((d) => (
+                            <button
+                              key={d.key}
+                              className="rounded-lg px-3 py-1.5 text-sm border bg-white hover:bg-gray-50 disabled:opacity-50"
+                              disabled={assigning}
+                              onClick={() => setWeekDay(d.key)}
+                            >
+                              {d.lt}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                    </div>
                   )}
                 </div>
               </div>

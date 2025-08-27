@@ -20,7 +20,7 @@ const MontavimasSchema = new mongoose.Schema(
     nvr: String,
     nvrSN: String,
     kameros: [CameraSchema],
-    papildomaIranga: String,
+    papildoma: String,
     tinklas: {
       kameruIP: String,
       routerioIP: String, // pvz. 192.168.x.x

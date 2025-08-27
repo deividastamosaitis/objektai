@@ -65,8 +65,9 @@ export const updateJob = async (req, res) => {
       (req.headers["content-type"] || "").includes("multipart/form-data");
     const body = req.body || {};
     const update = {};
+    const unset = {}; // kaupsim laukus, kuriuos reikia nuimti
 
-    // ——— Paprasti tekstiniai/skaitiniai laukai (pildyk pagal savo modelį, bet tik jei ateina body)
+    // ——— Paprasti laukai
     const passThroughKeys = [
       "vardas",
       "telefonas",
@@ -84,28 +85,44 @@ export const updateJob = async (req, res) => {
       }
     }
 
-    // ——— prislopintas: atnaujinti tik jei ateina laukas
+    // ——— prislopintas
     if (Object.prototype.hasOwnProperty.call(body, "prislopintas")) {
-      // forma siunčia "on" kai pažymėta, kitaip dažnai visai nesiunčia
       update.prislopintas =
         body.prislopintas === "on" || body.prislopintas === true;
     }
 
-    // ——— weekDay: Mon..Sat, ""/null -> null
+    // ——— weekDay (Mon..Sat), tuščia -> $unset
+    const ALLOWED_DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
     if (Object.prototype.hasOwnProperty.call(body, "weekDay")) {
       const v = body.weekDay;
       if (v === "" || v === null || v === undefined) {
-        update.weekDay = null;
+        unset.weekDay = 1; // NUIMAM lauką
+        delete update.weekDay;
       } else if (!ALLOWED_DAYS.includes(v)) {
         return res
           .status(StatusCodes.BAD_REQUEST)
           .json({ msg: "Neteisinga savaitės diena" });
       } else {
-        update.weekDay = v;
+        update.weekDay = v; // UŽDEDAM reikšmę
       }
     }
 
-    // ——— Nuotraukos: keisti tik jei multipart ir tik jei siųsti existingImages / naujas files
+    // ——— jei statusas „Baigta“ -> priverstinai nuimam weekDay
+    const incomingStatus = Object.prototype.hasOwnProperty.call(
+      body,
+      "jobStatus"
+    )
+      ? body.jobStatus
+      : current.jobStatus;
+    if (
+      typeof incomingStatus === "string" &&
+      incomingStatus.trim().toLowerCase() === "baigta"
+    ) {
+      unset.weekDay = 1; // NUIMAM lauką
+      delete update.weekDay; // jeigu buvom uždėję – išvalom
+    }
+
+    // ——— Nuotraukos (tik multipart)
     if (isMultipart) {
       const imagesToKeep = body.existingImages ?? [];
       const keep = Array.isArray(imagesToKeep) ? imagesToKeep : [imagesToKeep];
@@ -120,13 +137,15 @@ export const updateJob = async (req, res) => {
         );
         update.images = [...keep, ...newUploads];
       } else if (body.existingImages !== undefined) {
-        // jei bent jau existingImages yra – nustatyk naują masyvą (gali būti ir tuščias)
         update.images = keep;
       }
-      // jei multipart, bet be existingImages ir be files – neliesti images
     }
 
-    const updatedJob = await Job.findByIdAndUpdate(jobId, update, {
+    // ——— sukomponuojam galutinį update operatorių
+    const updateOps = { $set: update };
+    if (Object.keys(unset).length > 0) updateOps.$unset = unset;
+
+    const updatedJob = await Job.findByIdAndUpdate(jobId, updateOps, {
       new: true,
       runValidators: true,
     });
@@ -160,7 +179,7 @@ export const upsertMontavimas = async (req, res) => {
     nvr,
     nvrSN,
     kameros = [],
-    papildomaIranga,
+    papildoma,
     tinklas = {},
     prisijungimai = {},
     paleidimoData,
@@ -178,7 +197,7 @@ export const upsertMontavimas = async (req, res) => {
           sn: k.sn || "",
         }))
       : [],
-    papildomaIranga,
+    papildoma,
     tinklas: {
       kameruIP: tinklas.kameruIP || "",
       routerioIP: tinklas.routerioIP || "",
@@ -236,7 +255,7 @@ export const exportMontavimasExcel = async (req, res) => {
   push("Įrangos sistema", m.irangosSistema || "");
   push("NVR", m.nvr || "");
   push("NVR SN", m.nvrSN || "");
-  push("Papildoma įranga", m.papildomaIranga || "");
+  push("Papildoma įranga", m.papildoma || "");
   ws.addRow([]);
 
   ws.addRow(["Kameros", ""]).font = { bold: true };

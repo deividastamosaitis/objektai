@@ -52,9 +52,10 @@ function toGeoJSON(jobs) {
  *  - jobs: Job[]
  *  - onOpenJob: (id) => void
  */
-export default function MapJobs({ jobs = [], onOpenJob }) {
+export default function MapJobs({ jobs = [], onOpenJob, onApi }) {
   const mapRef = useRef(null);
   const containerRef = useRef(null);
+  const markersRef = useRef(new Map());
 
   // init žemėlapį
   useEffect(() => {
@@ -62,7 +63,7 @@ export default function MapJobs({ jobs = [], onOpenJob }) {
     const map = new mapboxgl.Map({
       container: containerRef.current,
       style: "mapbox://styles/mapbox/streets-v12",
-      center: [23.8813, 54.9014], // Kaunas
+      center: [23.8813, 54.9014],
       zoom: 6,
     });
     map.addControl(
@@ -70,8 +71,95 @@ export default function MapJobs({ jobs = [], onOpenJob }) {
       "top-right"
     );
     mapRef.current = map;
+
+    // --- normalizatorius: priima (lng,lat,zoom|opts) ARBA ([lng,lat], zoom|opts)
+    const normalizeFlyArgs = (...args) => {
+      let lng,
+        lat,
+        opts = {};
+      if (Array.isArray(args[0])) {
+        // ([lng,lat], zoom|opts?)
+        [lng, lat] = args[0];
+        if (typeof args[1] === "number") opts.zoom = args[1];
+        else if (typeof args[1] === "object" && args[1] !== null)
+          opts = { ...args[1] };
+      } else {
+        // (lng, lat, zoom|opts?)
+        lng = args[0];
+        lat = args[1];
+        if (typeof args[2] === "number") opts.zoom = args[2];
+        else if (typeof args[2] === "object" && args[2] !== null)
+          opts = { ...args[2] };
+      }
+      // konvertai į skaičius + defaultai
+      const lngN = Number(lng),
+        latN = Number(lat);
+      if (!Number.isFinite(lngN) || !Number.isFinite(latN)) {
+        throw new Error("Invalid coordinates for flyTo");
+      }
+      return {
+        lng: lngN,
+        lat: latN,
+        zoom: Number.isFinite(Number(opts.zoom)) ? Number(opts.zoom) : 14,
+        speed: Number.isFinite(Number(opts.speed)) ? Number(opts.speed) : 0.9,
+        curve: Number.isFinite(Number(opts.curve)) ? Number(opts.curve) : 1.4,
+        padding: opts.padding ?? 60,
+        openPopup: !!opts.openPopup,
+      };
+    };
+
+    if (onApi) {
+      onApi({
+        // priima bet kurią formą: (lng,lat,zoom|opts) ar ([lng,lat], zoom|opts)
+        flyTo: (...args) => {
+          if (!mapRef.current) return;
+          try {
+            const { lng, lat, zoom, speed, curve, padding } = normalizeFlyArgs(
+              ...args
+            );
+            mapRef.current.flyTo({
+              center: [lng, lat],
+              zoom,
+              speed,
+              curve,
+              padding,
+              essential: true,
+            });
+          } catch (e) {
+            console.warn(e?.message || e);
+          }
+        },
+
+        // focus pagal job id + opcijos (openPopup, zoom, speed, curve, padding)
+        focusJob: (id, opts = {}) => {
+          const rec = markersRef.current.get(id);
+          if (!rec || !mapRef.current) return false;
+          const { lng, lat } = rec;
+          const { zoom, speed, curve, padding, openPopup } = normalizeFlyArgs(
+            lng,
+            lat,
+            opts
+          );
+          mapRef.current.flyTo({
+            center: [lng, lat],
+            zoom,
+            speed,
+            curve,
+            padding,
+            essential: true,
+          });
+          if (openPopup && rec.marker) {
+            try {
+              rec.marker.togglePopup();
+            } catch {}
+          }
+          return true;
+        },
+      });
+    }
+
     return () => map.remove();
-  }, []);
+  }, [onApi]);
 
   // piešiam marker‘ius
   useEffect(() => {
@@ -79,10 +167,9 @@ export default function MapJobs({ jobs = [], onOpenJob }) {
     if (!map) return;
 
     // nuvalom senus marker‘ius
-    if (map._customMarkers) {
-      map._customMarkers.forEach((m) => m.remove());
-    }
+    if (map._customMarkers) map._customMarkers.forEach((m) => m.remove());
     map._customMarkers = [];
+    markersRef.current.clear();
 
     const geo = toGeoJSON(jobs);
     if (geo.features.length === 0) return;
@@ -102,14 +189,7 @@ export default function MapJobs({ jobs = [], onOpenJob }) {
       el.style.overflow = "hidden";
       el.style.boxShadow = "0 2px 6px rgba(0,0,0,0.2)";
       el.style.cursor = "pointer";
-      if (p.prislopintas) {
-        el.style.opacity = "0.5";
-        el.style.filter = "grayscale(0%) opacity(0.5)";
-        el.title = "Prislopintas";
-      } else {
-        el.style.opacity = "1";
-        el.style.filter = "none";
-      }
+      el.style.opacity = p.prislopintas ? "0.2" : "1";
 
       const img = document.createElement("img");
       img.src = p.icon;
@@ -117,13 +197,7 @@ export default function MapJobs({ jobs = [], onOpenJob }) {
       img.style.width = "100%";
       img.style.height = "100%";
       img.style.objectFit = "cover";
-      if (p.prislopintas) {
-        img.style.opacity = "1";
-        img.style.filter = "grayscale(0%) opacity(1)";
-      } else {
-        img.style.opacity = "1";
-        img.style.filter = "none";
-      }
+      img.style.opacity = p.prislopintas ? "0.5" : "1";
       el.appendChild(img);
 
       // data format
@@ -178,6 +252,7 @@ export default function MapJobs({ jobs = [], onOpenJob }) {
       });
 
       map._customMarkers.push(marker);
+      markersRef.current.set(p.id, { marker, lng, lat });
     });
 
     // pritaikom view

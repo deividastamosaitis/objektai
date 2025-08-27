@@ -64,13 +64,7 @@ export default function JobsCreate() {
     if (!form.telefonas.toString().trim()) return "Prašome įvesti telefoną";
     if (!form.adresas.trim()) return "Prašome įvesti adresą";
     if (!form.jobStatus) return "Pasirinkite statusą";
-    // el. paštas pasirenkamas, bet jei įvestas – patikrinam formatą
-    if (
-      form.email.trim() &&
-      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())
-    ) {
-      return "Neteisingas el. pašto formatas";
-    }
+
     return null;
   };
 

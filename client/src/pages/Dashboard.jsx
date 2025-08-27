@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import Navbar from "../components/Navbar.jsx";
 import { get } from "../api.js";
@@ -36,6 +36,7 @@ export default function Dashboard() {
   const [stats, setStats] = useState({ jobs: 0, sutartys: 0 });
   const [jobs, setJobs] = useState([]);
   const [loading, setLoading] = useState(true);
+  const mapApiRef = useRef(null);
 
   const [hideDone, setHideDone] = useState(true); // filtras: be „Baigta“
   const navigate = useNavigate();
@@ -140,6 +141,9 @@ export default function Dashboard() {
               <MapJobs
                 jobs={filteredJobs}
                 onOpenJob={(id) => navigate(`/jobs/${id}`)}
+                onApi={(api) => {
+                  mapApiRef.current = api;
+                }}
               />
             )}
           </section>
@@ -191,18 +195,53 @@ export default function Dashboard() {
                           <button
                             className="w-full text-left text-sm rounded-lg px-2 py-1 hover:bg-gray-50"
                             onClick={() => {
-                              if (!j.lat || !j.lng) return;
-                              // flyTo animacija į markerį
-                              const map =
-                                mapRef?.current?.getMap?.() ||
-                                mapRef?.current?.map;
-                              if (map && map.flyTo) {
-                                map.flyTo({
-                                  center: [Number(j.lng), Number(j.lat)],
+                              const id = j._id || j.id;
+                              if (!id) {
+                                console.warn("Row click: trūksta job id");
+                                return;
+                              }
+
+                              const api = mapApiRef.current;
+                              if (!api || typeof api.focusJob !== "function") {
+                                console.warn(
+                                  "Map API dar neparuoštas (onApi nebuvo suveikęs)"
+                                );
+                                // Fallback — jei turim koordinates, vis tiek praskriskim
+                                if (
+                                  j.lng &&
+                                  j.lat &&
+                                  Number(j.lng) &&
+                                  Number(j.lat)
+                                ) {
+                                  try {
+                                    api?.flyTo?.(
+                                      [Number(j.lng), Number(j.lat)],
+                                      { zoom: 14 }
+                                    );
+                                  } catch {}
+                                }
+                                return;
+                              }
+
+                              // Bandome fokusuoti pagal markerio ID ir atidaryti popup’ą
+                              const ok = api.focusJob(id, {
+                                openPopup: true,
+                                zoom: 14,
+                                speed: 0.9,
+                                curve: 1.4,
+                                padding: 80,
+                              });
+
+                              // Jei nerado markerio, darykim fallback’ą pagal koordinates
+                              if (
+                                !ok &&
+                                j.lng &&
+                                j.lat &&
+                                Number(j.lng) &&
+                                Number(j.lat)
+                              ) {
+                                api.flyTo([Number(j.lng), Number(j.lat)], {
                                   zoom: 14,
-                                  essential: true,
-                                  speed: 0.8,
-                                  curve: 1.4,
                                 });
                               }
                             }}
