@@ -62,7 +62,7 @@ const JobSchema = new mongoose.Schema(
     weekDay: {
       type: String,
       enum: ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat"],
-      default: null,
+      default: undefined,
     },
   },
   { timestamps: true }

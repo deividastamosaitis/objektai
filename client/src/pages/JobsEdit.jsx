@@ -109,12 +109,6 @@ export default function JobsEdit() {
     if (!form.telefonas.toString().trim()) return "Prašome įvesti telefoną";
     if (!form.adresas.trim()) return "Prašome įvesti adresą";
     if (!form.jobStatus) return "Pasirinkite statusą";
-    if (
-      form.email.trim() &&
-      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(form.email.trim())
-    ) {
-      return "Neteisingas el. pašto formatas";
-    }
     return null;
   };
 
@@ -293,7 +287,6 @@ export default function JobsEdit() {
                 <input
                   id="email"
                   name="email"
-                  type="email"
                   placeholder="pvz. vardas@pastas.lt"
                   className="w-full rounded-xl border px-3 py-2 focus:ring-2 focus:ring-blue-600"
                   value={form.email}

@@ -173,7 +173,7 @@ export default function Dashboard() {
                       j.adresas ? `• ${j.adresas}` : ""
                     }`}
                     subtitle={j.info || j.jobStatus || ""}
-                    right={new Date(j.createdAt).toLocaleDateString()}
+                    right={new Date(j.updatedAt).toLocaleDateString()}
                   />
                 ))}
               </div>
@@ -193,7 +193,8 @@ export default function Dashboard() {
                       {grouped[d.key].map((j) => (
                         <li key={j._id}>
                           <button
-                            className="w-full text-left text-sm rounded-lg px-2 py-1 hover:bg-gray-50"
+                            className="border-black border-1 mb-1 w-full text-left text-sm rounded-lg px-2 py-1 hover:bg-gray-50"
+                            cursor
                             onClick={() => {
                               const id = j._id || j.id;
                               if (!id) {
@@ -251,7 +252,7 @@ export default function Dashboard() {
                               {j.vardas || "—"}
                             </div>
                             <div className="text-xs text-gray-500 truncate">
-                              {j.adresas || "—"}
+                              {j.info || "—"}
                             </div>
                           </button>
                         </li>

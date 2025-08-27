@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import Navbar from "../components/Navbar.jsx";
-import { get, patchForm, patch } from "../api.js";
+import { get, patchForm, patch, del } from "../api.js";
 import Lightbox from "../components/Lightbox.jsx";
 
 // Nauja – graži korta + modalas montavimui
@@ -14,6 +14,7 @@ export default function JobDetails() {
   const [job, setJob] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
+  const [deleting, setDeleting] = useState(false);
 
   const [lightboxOpen, setLightboxOpen] = useState(false);
   const [lightboxStart, setLightboxStart] = useState(0);
@@ -127,10 +128,6 @@ export default function JobDetails() {
         </div>
 
         <div className="flex items-center gap-2">
-          <Link to="/jobs" className="text-sm text-blue-600 hover:underline">
-            ← Grįžti į sąrašą
-          </Link>
-
           {job && (
             <>
               <button
@@ -195,6 +192,33 @@ export default function JobDetails() {
                 title="Sudaryti sutartį pagal šį įrašą"
               >
                 Sudaryti sutartį
+              </button>
+              <button
+                onClick={async () => {
+                  if (!job) return;
+                  const ok = window.confirm(
+                    `Ar tikrai norite ištrinti „${
+                      job.vardas || "objektą"
+                    }“? Šio veiksmo atšaukti nepavyks.`
+                  );
+                  if (!ok) return;
+
+                  try {
+                    setDeleting(true);
+                    await del(`/jobs/${job._id}`);
+                    // grįžtam į sąrašą
+                    navigate("/jobs");
+                  } catch (e) {
+                    alert(e?.message || "Nepavyko ištrinti objekto");
+                  } finally {
+                    setDeleting(false);
+                  }
+                }}
+                disabled={deleting}
+                className="text-sm rounded-lg bg-red-600 text-white px-3 py-1.5 hover:bg-red-700 disabled:opacity-50"
+                title="Ištrinti objektą"
+              >
+                {deleting ? "Trinama…" : "Ištrinti"}
               </button>
             </>
           )}

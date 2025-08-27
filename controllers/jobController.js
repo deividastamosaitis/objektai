@@ -15,6 +15,28 @@ export const createJob = async (req, res) => {
     const newJob = { ...req.body };
     newJob.createdBy = req.user.userId;
 
+    // --- NORMALIZUOJAM weekDay
+    const ALLOWED_DAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+
+    if (Object.prototype.hasOwnProperty.call(newJob, "weekDay")) {
+      const v = newJob.weekDay;
+      if (v === "" || v === null || v === undefined) {
+        delete newJob.weekDay; // nesiunčiam į DB, kad nepataikyt į enum=null
+      } else if (!ALLOWED_DAYS.includes(v)) {
+        return res
+          .status(StatusCodes.BAD_REQUEST)
+          .json({ msg: "Neteisinga savaitės diena" });
+      }
+    }
+
+    // jei statusas BAIGTA – weekDay nuimam visais atvejais
+    if (
+      typeof newJob.jobStatus === "string" &&
+      newJob.jobStatus.trim().toLowerCase() === "baigta"
+    ) {
+      delete newJob.weekDay;
+    }
+
     // Boolean konversijos, jei prireiktų ateityje
     if (typeof newJob.prislopintas !== "undefined") {
       newJob.prislopintas =
@@ -82,6 +104,18 @@ export const updateJob = async (req, res) => {
     for (const k of passThroughKeys) {
       if (Object.prototype.hasOwnProperty.call(body, k)) {
         update[k] = body[k];
+      }
+    }
+
+    // ——— el. paštas: jei '-' / tuščia / be '@' → nuimam lauką; kitaip – normalizuojam
+    if (Object.prototype.hasOwnProperty.call(body, "email")) {
+      const raw = (body.email ?? "").trim();
+      const looksInvalid = !raw || raw === "-" || !raw.includes("@");
+      if (looksInvalid) {
+        unset.email = 1; // $unset
+        delete update.email; // saugumo dėlei
+      } else {
+        update.email = raw.toLowerCase();
       }
     }
 
