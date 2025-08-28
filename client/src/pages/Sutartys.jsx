@@ -62,6 +62,24 @@ async function copyToClipboard(text) {
   }
 }
 
+function CopyLinkButton({ url }) {
+  const [ok, setOk] = useState(false);
+
+  return (
+    <button
+      onClick={async () => {
+        const success = await copyToClipboard(url);
+        setOk(success);
+        setTimeout(() => setOk(false), 1500);
+      }}
+      className="rounded-lg border px-3 py-1.5 text-sm bg-white hover:bg-gray-50"
+      title="Kopijuoti pasirašymo nuorodą"
+    >
+      {ok ? "Nukopijuota!" : "Kopijuoti nuorodą"}
+    </button>
+  );
+}
+
 export default function Sutartys() {
   const [items, setItems] = useState([]);
   const [loading, setLoading] = useState(true);
