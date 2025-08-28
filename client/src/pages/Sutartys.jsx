@@ -20,23 +20,46 @@ function StatusBadge({ status }) {
   );
 }
 
-function CopyLinkButton({ url }) {
-  const [ok, setOk] = useState(false);
-  return (
-    <button
-      onClick={async () => {
-        try {
-          await navigator.clipboard.writeText(url);
-          setOk(true);
-          setTimeout(() => setOk(false), 1500);
-        } catch {}
-      }}
-      className="rounded-lg border px-3 py-1.5 text-sm bg-white hover:bg-gray-50"
-      title="Kopijuoti pasirašymo nuorodą"
-    >
-      {ok ? "Nukopijuota!" : "Kopijuoti nuorodą"}
-    </button>
-  );
+const PUBLIC_WEB_ORIGIN =
+  import.meta.env.VITE_PUBLIC_WEB_ORIGIN || "http://sutartys.todesa.lt";
+
+// ——— helperiai kopijavimui (veikia ir http) ———
+function buildAbsoluteUrl(url) {
+  if (!url) return "";
+  try {
+    // Sukuriam URL su tavo norimu domenu kaip baze
+    const u = new URL(url, PUBLIC_WEB_ORIGIN); // palaiko ir absoliutų, ir santykinį
+    // Visada priverstinai naudojam tavo domeną, bet paliekam path/query/hash
+    const rebased = new URL(u.pathname + u.search + u.hash, PUBLIC_WEB_ORIGIN);
+    return rebased.href;
+  } catch {
+    // jei kas nors labai netaisyklinga – tiesiog priklijuojam
+    const path = url.startsWith("/") ? url : `/${url}`;
+    return `${PUBLIC_WEB_ORIGIN}${path}`;
+  }
+}
+
+async function copyToClipboard(text) {
+  const value = buildAbsoluteUrl(text);
+  try {
+    if (navigator.clipboard && window.isSecureContext) {
+      await navigator.clipboard.writeText(value);
+      return true;
+    }
+    const ta = document.createElement("textarea");
+    ta.value = value;
+    ta.style.position = "fixed";
+    ta.style.left = "-9999px";
+    ta.style.top = "0";
+    document.body.appendChild(ta);
+    ta.focus();
+    ta.select();
+    const ok = document.execCommand("copy");
+    document.body.removeChild(ta);
+    return ok;
+  } catch {
+    return false;
+  }
 }
 
 export default function Sutartys() {

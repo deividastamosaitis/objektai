@@ -8,7 +8,7 @@ import fontkit from "@pdf-lib/fontkit";
 import puppeteer from "puppeteer";
 
 const PUBLIC_APP_ORIGIN =
-  process.env.PUBLIC_APP_ORIGIN || "http://localhost:5173";
+  process.env.PUBLIC_APP_ORIGIN || "http://sutartys.todesa.lt";
 
 // Kur laikom fontą
 const FONT_PATH = path.join(
