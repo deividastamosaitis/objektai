@@ -435,9 +435,10 @@ export const signPublicContract = async (req, res) => {
 
   // Puppeteer → PDF
   const browser = await puppeteer.launch({
-    // jei serveris: pridėk šituos:
-    // args: ['--no-sandbox', '--disable-setuid-sandbox'],
+    headless: "new", // arba true, jei sena versija
+    args: ["--no-sandbox", "--disable-setuid-sandbox"],
   });
+
   try {
     const page = await browser.newPage();
     // labai svarbu: leisti krauti lokalinį fontą per /public
