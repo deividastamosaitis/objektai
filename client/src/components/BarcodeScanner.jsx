@@ -9,6 +9,7 @@ import {
 export default function BarcodeScanner({ onDetected, isOpen = true, onClose }) {
   const videoRef = useRef(null);
   const [reader, setReader] = useState(null);
+  const controlsRef = useRef(null);
   const [devices, setDevices] = useState([]);
   const [activeDeviceId, setActiveDeviceId] = useState(null);
   const [stream, setStream] = useState(null);
@@ -82,7 +83,7 @@ export default function BarcodeScanner({ onDetected, isOpen = true, onClose }) {
     try {
       setMessage("");
       setScanning(true);
-      await reader.decodeFromVideoDevice(
+      controlsRef.current = await reader.decodeFromVideoDevice(
         activeDeviceId,
         videoRef.current,
         (result, err) => {
@@ -96,9 +97,11 @@ export default function BarcodeScanner({ onDetected, isOpen = true, onClose }) {
 
             if (rawText && rawText !== lastHit) {
               setLastHit(rawText);
+              // 1) Perduodam rezultatą
               onDetected?.({ rawText, format });
               setMessage(`Aptikta: ${rawText} (${format})`);
-              setTimeout(() => setLastHit(""), 1200);
+              // 2) Iškart stabdom skenavimą, kad neperrašinėtų SN redaguojant
+              stopScanning();
             }
           } else if (err && !(err instanceof NotFoundException)) {
             console.warn(err);
@@ -118,8 +121,10 @@ export default function BarcodeScanner({ onDetected, isOpen = true, onClose }) {
 
   const stopScanning = () => {
     try {
+      controlsRef.current?.stop?.();
       reader?.reset();
       stream?.getTracks?.().forEach((t) => t.stop());
+      if (videoRef.current) videoRef.current.srcObject = null;
     } catch {}
     setScanning(false);
     setTorchOn(false);
