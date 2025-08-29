@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { get } from "../api.js";
 import { saveMontavimas } from "../api.js";
+// ⤵️ PRIDĖTA: skenerio komponentas (iš ankstesnio failo)
+// Pritaikyk kelią pagal savo struktūrą, pvz.: "../components/BarcodeScanner"
+import BarcodeScanner from "../components/BarcodeScanner";
 
 const pad = (n) => String(n).padStart(2, "0");
 const todayISO = () => {
@@ -22,6 +25,40 @@ function parseLastTwo(ip) {
   return [m[1], m[2]];
 }
 
+// ⤵️ PRIDĖTA: bandome iškrapštyti SN iš įvairių QR/barcode tekstų formų
+function extractSN(rawText) {
+  if (!rawText) return "";
+  const t = String(rawText).trim();
+  // Dažniausi variantai: "SN: ABC123", "S/N ABC123", "serial=ABC123", JSON su {sn:"..."}
+  const patterns = [
+    /SN\s*[:#\-]?\s*([A-Za-z0-9\-_/]+)\b/i,
+    /S\/N\s*[:#\-]?\s*([A-Za-z0-9\-_/]+)\b/i,
+    /serial\s*[:=#]\s*([A-Za-z0-9\-_/]+)\b/i,
+    /sn\s*[:=#]\s*([A-Za-z0-9\-_/]+)\b/i,
+  ];
+  for (const rx of patterns) {
+    const m = t.match(rx);
+    if (m?.[1]) return m[1];
+  }
+  // Jei QR yra URL su ?sn= arba ?serial=
+  try {
+    if (/^https?:\/\//i.test(t)) {
+      const u = new URL(t);
+      const sn = u.searchParams.get("sn") || u.searchParams.get("serial");
+      if (sn) return sn;
+    }
+  } catch {}
+  // Jei JSON
+  try {
+    const obj = JSON.parse(t);
+    if (typeof obj?.sn === "string") return obj.sn;
+    if (typeof obj?.SN === "string") return obj.SN;
+    if (typeof obj?.serial === "string") return obj.serial;
+  } catch {}
+  // Jei paprastas 1D barkodas – dažnai visas tekstas yra SN
+  return t;
+}
+
 export default function MontavimasModal({
   open,
   onClose,
@@ -34,6 +71,11 @@ export default function MontavimasModal({
 
   // current user
   const [currentName, setCurrentName] = useState("");
+
+  // ⤵️ PRIDĖTA: skenavimo modal valdymas
+  const [scannerOpen, setScannerOpen] = useState(false);
+  const [scannerForIndex, setScannerForIndex] = useState(null); // kuri kameros eilutė
+  const [scanMsg, setScanMsg] = useState("");
 
   useEffect(() => {
     let ignore = false;
@@ -133,19 +175,14 @@ export default function MontavimasModal({
 
     // 4) Auto laukai – jei redaguojam, rodom esamą; jei nėra – paliekam auto
     if (initial?.paleidimoData) {
-      // gali būti Date/string – normalizuojam į YYYY-MM-DD
       const d = new Date(initial.paleidimoData);
       const pad2 = (n) => String(n).padStart(2, "0");
       const iso = `${d.getFullYear()}-${pad2(d.getMonth() + 1)}-${pad2(
         d.getDate()
       )}`;
-      // paleidimoData yra disabled, bet vis tiek parodysim esamą
-      // NOTE: jei tavo state aprašytas kaip const [paleidimoData] = useState(...),
-      // pakeisk į: const [paleidimoData, setPaleidimoData] = useState(todayISO());
       setPaleidimoData && setPaleidimoData(iso);
     }
 
-    // Darbus atliko – jei jau išsaugotas vardas stringe, rodome jį; kitaip paliekam currentName
     if (
       typeof initial?.darbusAtliko === "string" &&
       initial.darbusAtliko.trim()
@@ -168,6 +205,29 @@ export default function MontavimasModal({
   const removeCamera = (idx) =>
     setKameros((arr) => arr.filter((_, i) => i !== idx));
 
+  // ⤵️ PRIDĖTA: skenavimo startas konkrečiai eilučių SN laukui
+  const openScannerFor = (idx) => {
+    setScannerForIndex(idx);
+    setScanMsg("");
+    setScannerOpen(true);
+  };
+
+  // ⤵️ PRIDĖTA: Callback iš skenerio
+  const handleScanDetected = ({ rawText, format }) => {
+    const sn = extractSN(rawText);
+    if (scannerForIndex == null) return;
+    // dublikato apsauga (SN tarp kamerų)
+    const isDup = kameros.some((k, i) => i !== scannerForIndex && k.sn === sn);
+    if (isDup) {
+      setScanMsg(`SN \"${sn}\" jau pridėtas kitoje eilutėje.`);
+      // vis tiek įrašom, jei nori – gali komentuoti šią eilutę
+      // return;
+    }
+    upsertKamera(scannerForIndex, "sn", sn);
+    setScannerOpen(false);
+    setScannerForIndex(null);
+  };
+
   const handleSave = async () => {
     setError(null);
 
@@ -182,29 +242,22 @@ export default function MontavimasModal({
     }
 
     const payload = {
-      // „skaitymo“ dalis
       objAdresas,
       klientVardas,
       klientTel,
-
-      // Įrangos sistema – tik informacinė (galime vis tiek nusiųsti, jei backend saugo)
       irangosSistema,
-
       nvr,
       nvrSN,
       kameros,
       papildoma,
-
       tinklas: {
         kameruIP: kameruIP || "",
         routerioIP: `192.168.${rA}.${rB}`,
         nvrIP: `192.168.${nA}.${nB}`,
       },
-
       prisijungimai: {
         nvr: nvrLogin,
       },
-
       paleidimoData, // YYYY-MM-DD, auto
       darbusAtliko, // current user, auto
     };
@@ -223,7 +276,7 @@ export default function MontavimasModal({
 
   return (
     <div className="fixed inset-0 bg-black/30 flex items-center justify-center p-4 z-50">
-      <div className="w-full max-w-3xl rounded-2xl bg-white border shadow-lg p-4 max-h-[90vh] overflow-y-auto">
+      <div className="w-full max-w-3xl rounded-2xl bg-white border shadow-lg p-4 max-h-[90vh] overflow-y-auto relative">
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-lg font-semibold">Montavimo forma</h2>
           <button
@@ -287,11 +340,14 @@ export default function MontavimasModal({
               />
             </Field>
             <Field label="NVR SN numeris">
-              <input
-                className="w-full rounded-xl border px-3 py-2"
-                value={nvrSN}
-                onChange={(e) => setNvrSN(e.target.value)}
-              />
+              <div className="flex gap-2">
+                <input
+                  className="w-full rounded-xl border px-3 py-2"
+                  value={nvrSN}
+                  onChange={(e) => setNvrSN(e.target.value)}
+                />
+                {/* Galbūt ateityje pridėsi skenavimą ir NVR SN */}
+              </div>
             </Field>
           </div>
 
@@ -321,12 +377,22 @@ export default function MontavimasModal({
                     upsertKamera(i, "pavadinimas", e.target.value)
                   }
                 />
-                <input
-                  placeholder="Kameros SN"
-                  className="rounded-xl border px-3 py-2"
-                  value={k.sn}
-                  onChange={(e) => upsertKamera(i, "sn", e.target.value)}
-                />
+                <div className="flex gap-2 items-center">
+                  <input
+                    placeholder="Kameros SN"
+                    className="rounded-xl border px-3 py-2 flex-1"
+                    value={k.sn}
+                    onChange={(e) => upsertKamera(i, "sn", e.target.value)}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => openScannerFor(i)}
+                    className="rounded-lg px-3 py-2 border bg-white hover:bg-gray-50"
+                    title="Skenuoti barkodą/QR"
+                  >
+                    Skenuoti
+                  </button>
+                </div>
                 <button
                   type="button"
                   onClick={() => removeCamera(i)}
@@ -485,6 +551,42 @@ export default function MontavimasModal({
             {saving ? "Saugoma…" : "Išsaugoti"}
           </button>
         </div>
+
+        {/* ⤵️ PRIDĖTA: pilno ekrano skenavimo modalas (tik kai atidarytas) */}
+        {scannerOpen && (
+          <div className="absolute inset-0 bg-white/95 backdrop-blur-sm z-50 flex flex-col">
+            <div className="flex items-center justify-between p-3 border-b">
+              <div className="text-sm text-gray-600">
+                Nuskaitykite kameros barkodą / QR (eilutė #
+                {(scannerForIndex ?? 0) + 1})
+              </div>
+              <button
+                className="rounded-lg border px-3 py-1.5 bg-white hover:bg-gray-50"
+                onClick={() => {
+                  setScannerOpen(false);
+                  setScannerForIndex(null);
+                }}
+              >
+                Uždaryti
+              </button>
+            </div>
+            <div className="flex-1 overflow-auto p-3">
+              <BarcodeScanner
+                isOpen={scannerOpen}
+                onDetected={handleScanDetected}
+                onClose={() => {
+                  setScannerOpen(false);
+                  setScannerForIndex(null);
+                }}
+              />
+              {scanMsg && (
+                <div className="mt-2 text-sm text-amber-700 bg-amber-50 border border-amber-200 rounded-lg p-2">
+                  {scanMsg}
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
